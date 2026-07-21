@@ -406,6 +406,14 @@ def build_ffmpeg_cmd(
     with_filters: bool = True,
     start_ss: float = 0.0,
 ) -> List[str]:
+    """
+    Construye el comando FFmpeg para validar un stream.
+
+    Importante:
+    - extension_picky es una opción privada del demuxer HLS.
+    - No se añaden opciones de reconexión globalmente: algunos builds nuevos
+      pueden rechazarlas según el protocolo/demuxer.
+    """
     kind = stream_kind(e.url)
     rw_us = str(int(max(cfg.rw_timeout, 1.0) * 1_000_000))
 
@@ -417,12 +425,6 @@ def build_ffmpeg_cmd(
         "info",
         "-rw_timeout",
         rw_us,
-        "-reconnect",
-        "1",
-        "-reconnect_streamed",
-        "1",
-        "-reconnect_delay_max",
-        "3",
         "-probesize",
         str(cfg.probesize),
         "-analyzeduration",
@@ -433,9 +435,11 @@ def build_ffmpeg_cmd(
         "ignore_err",
     ]
 
+    # Estas opciones pertenecen al demuxer HLS y deben estar antes de -i.
     if kind == "hls":
         if getattr(cfg, "ext_picky", False):
             cmd += ["-extension_picky", "0"]
+
         cmd += [
             "-allowed_extensions",
             "ALL",
@@ -445,8 +449,11 @@ def build_ffmpeg_cmd(
             str(cfg.max_reload),
         ]
 
+    # Headers, User-Agent y Referer también deben ir antes de -i.
     cmd += [*ffmpeg_input_args(e, cfg.default_ua), "-i", e.url]
 
+    # -ss después del input: salta contenido ya abierto; se usa para
+    # reintentar casos de pantalla negra al inicio.
     if start_ss and start_ss > 0:
         cmd += ["-ss", f"{start_ss:.3f}"]
 
@@ -477,7 +484,6 @@ def build_ffmpeg_cmd(
         "-",
     ]
     return cmd
-
 
 # ---------------------------------------------------------------------------
 # Análisis de un canal

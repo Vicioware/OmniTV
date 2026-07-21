@@ -84,6 +84,21 @@ jobs:
           if [ -f scripts/requirements.txt ]; then
             pip install -r scripts/requirements.txt
           fi
+          
+      - name: Diagnóstico temporal de opciones FFmpeg
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "=== extension_picky ==="
+          ffmpeg -hide_banner -h demuxer=hls 2>&1 | grep -A2 -B2 extension_picky || true
+
+          echo "=== Opciones de reconnect ==="
+          ffmpeg -hide_banner -h protocol=http 2>&1 | grep -E "reconnect|rw_timeout" || true
+
+          echo "=== max_reload y allowed_extensions ==="
+          ffmpeg -hide_banner -h demuxer=hls 2>&1 | \
+            grep -E "allowed_extensions|max_reload|m3u8_hold_counters" || true
 
       - name: Paso 1 - Limpiar maestra
         env:
