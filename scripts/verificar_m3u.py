@@ -1,23 +1,5 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Verifica con FFmpeg qué canales de un M3U se reproducen de verdad
-(decodifica vídeo y detecta negro/congelado).
-
-Preserva el bloque completo de cada entrada:
-  #EXTINF:...
-  #EXTVLCOPT:...
-  #KODIPROP:...
-  https://...
-
-Uso típico (local):
-  python verificar_m3u.py lista.m3u -o ok.m3u -f fail.m3u -w 3 -v
-
-Uso típico (GitHub Actions / pipeline):
-  python verificar_m3u.py data/master.m3u \\
-    -o /tmp/ok.m3u -f /tmp/fail.m3u \\
-    -w 3 -t 12 --no-csv -v
-"""
 
 from __future__ import annotations
 
@@ -400,9 +382,10 @@ def ffmpeg_sync_args() -> List[str]:
 
 
 def ffmpeg_supports_extension_picky() -> bool:
+    """Devuelve True si el demuxer HLS admite -extension_picky."""
     try:
         p = subprocess.run(
-            ["ffmpeg", "-h", "full"],
+            ["ffmpeg", "-hide_banner", "-h", "demuxer=hls"],
             capture_output=True,
             text=True,
             timeout=20,
@@ -410,7 +393,8 @@ def ffmpeg_supports_extension_picky() -> bool:
         )
         blob = (p.stdout or "") + (p.stderr or "")
         return "extension_picky" in blob
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
+        LOG.debug("No se pudo consultar extension_picky: %s", exc)
         return False
 
 
