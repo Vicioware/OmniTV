@@ -367,18 +367,33 @@ def run_ffmpeg(
 
 def ffmpeg_sync_args() -> List[str]:
     try:
-        out = subprocess.run(
-            ["ffmpeg", "-version"],
+        p = subprocess.run(
+            ["ffmpeg", "-hide_banner", "-h", "full"],
             capture_output=True,
             text=True,
-            timeout=15,
-        ).stdout
-        m = re.search(r"ffmpeg version \D*?(\d+)\.(\d+)", out or "")
-        if m and (int(m.group(1)), int(m.group(2))) >= (5, 1):
+            timeout=20,
+            errors="replace",
+        )
+        blob = (p.stdout or "") + (p.stderr or "")
+
+        if re.search(r"^\s*-fps_mode(?:\s|$)", blob, re.M):
             return ["-fps_mode", "passthrough"]
-    except Exception:  # noqa: BLE001
-        pass
-    return ["-vsync", "0"]
+
+        # Compatibilidad con builds antiguos: solo se llega aquí si
+        # realmente no existe -fps_mode.
+        if re.search(r"^\s*-vsync(?:\s|$)", blob, re.M):
+            return ["-vsync", "0"]
+
+        # No hace falta una opción de sync para validar frames.
+        return []
+
+    except Exception as exc:  # noqa: BLE001
+        LOG.warning(
+            "No se pudo detectar la opción de sincronización FFmpeg: %s. "
+            "Se continúa sin -fps_mode/-vsync.",
+            exc,
+        )
+        return []
 
 
 def ffmpeg_supports_extension_picky() -> bool:
