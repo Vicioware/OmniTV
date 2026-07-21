@@ -1,0 +1,2 @@
+https://github.com/iptv-org/iptv/raw/master/streams/ar.m3u
+https://gist.githubusercontent.com/frantdse/f6989518c73826ade6734c63c367af4c/raw/
