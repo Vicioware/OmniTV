@@ -36,11 +36,31 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install FFmpeg
+      - name: Setup FFmpeg (con extension_picky)
+        uses: FedericoCarboni/setup-ffmpeg@v3
+        with:
+          # "release" = última estable; o fija p.ej. "7.0.2" / "6.1.1"
+          ffmpeg-version: release
+          architecture: x64
+          linking-type: static
+          github-token: ${{ github.token }}
+
+      - name: Verificar FFmpeg y extension_picky
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
-          ffmpeg -version | head -n 2
+          set -euo pipefail
+          echo "=== ffmpeg -version ==="
+          ffmpeg -version | head -n 5
+          echo "=== which ffmpeg ==="
+          which ffmpeg
+
+          # Debe existir la opción (FFmpeg >= 6.1)
+          if ! ffmpeg -h full 2>&1 | grep -q "extension_picky"; then
+            echo "::error::FFmpeg no expone -extension_picky. Abortando."
+            ffmpeg -h full 2>&1 | grep -i extension || true
+            exit 1
+          fi
+
+          echo "OK: extension_picky disponible"
 
       - name: Install Python deps
         run: |
