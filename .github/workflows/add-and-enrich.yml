@@ -104,12 +104,15 @@ jobs:
             --report-dir ../reports/source_csv
 
       - name: Paso 3 - Enriquecer tvg-logo y tvg-id
+        timeout-minutes: 8
         env:
           PYTHONPATH: ${{ github.workspace }}/scripts
           PYTHONUNBUFFERED: "1"
         working-directory: scripts
         run: |
-          python enrich_metadata.py --master ../data/master.m3u
+          python enrich_metadata.py \
+            --master ../data/master.m3u \
+            --download-timeout 120
 
       - name: Guardar playlist final
         run: |
