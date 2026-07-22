@@ -99,9 +99,9 @@ jobs:
             --sources ../data/source_playlists.txt \
             --workers "${{ inputs.workers || '3' }}" \
             --sample "${{ inputs.sample || '12' }}" \
-            --alive-output ../reports/sources_alive.m3u \
-            --dead-output ../reports/sources_dead.m3u \
-            --report-dir ../reports/source_csv
+            --alive-output ../reports/sources_alive_final.m3u \
+            --dead-output ../reports/sources_dead_final.m3u \
+            --report-dir ../reports/source_checks
 
       - name: Paso 3 - Enriquecer tvg-logo y tvg-id
         timeout-minutes: 8

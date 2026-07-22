@@ -95,11 +95,14 @@ jobs:
 
           python clean_master.py \
             --master ../data/master.m3u \
-            --workers "${{ github.event.inputs.workers || '3' }}" \
-            --sample "${{ github.event.inputs.sample || '12' }}" \
-            --ok-output ../reports/master_alive_step1.m3u \
-            --fail-output ../reports/master_dead_step1.m3u \
-            --report-output ../reports/master_check_step1.csv
+            --workers "${{ inputs.workers || '3' }}" \
+            --sample "${{ inputs.sample || '12' }}" \
+            --first-ok-output ../reports/master_alive_first_pass.m3u \
+            --first-fail-output ../reports/master_dead_first_pass.m3u \
+            --first-report-output ../reports/master_check_first_pass.csv \
+            --ok-output ../reports/master_alive_final.m3u \
+            --fail-output ../reports/master_dead_final.m3u \
+            --report-output ../reports/master_check_final.csv
 
       - name: Paso 2 - Merge fuentes
         env:
