@@ -84,21 +84,6 @@ jobs:
           if [ -f scripts/requirements.txt ]; then
             pip install -r scripts/requirements.txt
           fi
-          
-      - name: Diagnóstico temporal de opciones FFmpeg
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          echo "=== extension_picky ==="
-          ffmpeg -hide_banner -h demuxer=hls 2>&1 | grep -A2 -B2 extension_picky || true
-
-          echo "=== Opciones de reconnect ==="
-          ffmpeg -hide_banner -h protocol=http 2>&1 | grep -E "reconnect|rw_timeout" || true
-
-          echo "=== max_reload y allowed_extensions ==="
-          ffmpeg -hide_banner -h demuxer=hls 2>&1 | \
-            grep -E "allowed_extensions|max_reload|m3u8_hold_counters" || true
 
       - name: Paso 1 - Limpiar maestra
         env:
@@ -106,10 +91,15 @@ jobs:
           PYTHONUNBUFFERED: "1"
         working-directory: scripts
         run: |
+          mkdir -p ../reports
+
           python clean_master.py \
             --master ../data/master.m3u \
             --workers "${{ github.event.inputs.workers || '3' }}" \
-            --sample "${{ github.event.inputs.sample || '12' }}"
+            --sample "${{ github.event.inputs.sample || '12' }}" \
+            --ok-output ../reports/master_alive_step1.m3u \
+            --fail-output ../reports/master_dead_step1.m3u \
+            --report-output ../reports/master_check_step1.csv
 
       - name: Paso 2 - Merge fuentes
         env:
@@ -131,14 +121,19 @@ jobs:
         run: |
           python enrich_metadata.py --master ../data/master.m3u
 
-      - name: Upload reportes de fallos (artefacto)
+      - name: Guardar playlist final como reporte
+        run: |
+          mkdir -p reports
+          cp data/master.m3u reports/master_final.m3u
+
+      - name: Subir reportes de la ejecución
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: iptv-fail-reports
-          path: |
-            data/master_fail_last.m3u
-          if-no-files-found: ignore
+          name: iptv-report-${{ github.run_number }}
+          path: reports/
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Commit y push
         run: |

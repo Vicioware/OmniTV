@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Paso 1: elimina streams muertos de la playlist maestra (bloque completo)."""
+"""Paso 1: elimina streams muertos de la playlist maestra."""
+
 from __future__ import annotations
 
 import argparse
@@ -11,12 +12,39 @@ import tempfile
 from pathlib import Path
 
 
+def copy_if_requested(source: Path, destination: str | None) -> None:
+    """Copia source a destination si el usuario proporcionó una ruta."""
+    if not destination or not source.exists():
+        return
+
+    target = Path(destination).resolve()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(source, target)
+    print(f"Reporte guardado: {target}", flush=True)
+
+
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Limpia streams muertos de la maestra")
+    ap = argparse.ArgumentParser(
+        description="Limpia streams muertos de la playlist maestra"
+    )
     ap.add_argument("--master", default="data/master.m3u")
     ap.add_argument("--workers", type=int, default=3)
     ap.add_argument("--sample", type=float, default=12.0)
-    ap.add_argument("--extra-args", default="", help="Args extra para verificar_m3u")
+    ap.add_argument(
+        "--ok-output",
+        default=None,
+        help="Copia persistente de streams vivos detectados",
+    )
+    ap.add_argument(
+        "--fail-output",
+        default=None,
+        help="Copia persistente de streams muertos detectados",
+    )
+    ap.add_argument(
+        "--report-output",
+        default=None,
+        help="Copia persistente del CSV del checker",
+    )
     args = ap.parse_args()
 
     master = Path(args.master).resolve()
@@ -25,14 +53,16 @@ def main() -> int:
     if not master.exists():
         print(f"ERROR: no existe {master}", file=sys.stderr)
         return 1
+
     if not script.exists():
         print(f"ERROR: no existe {script}", file=sys.stderr)
         return 1
 
     with tempfile.TemporaryDirectory(prefix="iptv-clean-") as tmp:
         tmp_p = Path(tmp)
-        ok_path = tmp_p / "ok.m3u"
-        fail_path = tmp_p / "fail.m3u"
+        ok_path = tmp_p / "master_alive.m3u"
+        fail_path = tmp_p / "master_dead.m3u"
+        csv_path = tmp_p / "master_check.csv"
 
         cmd = [
             sys.executable,
@@ -42,34 +72,38 @@ def main() -> int:
             str(ok_path),
             "-f",
             str(fail_path),
+            "-r",
+            str(csv_path),
             "-w",
             str(args.workers),
             "-t",
             str(args.sample),
-            "--no-csv",
             "-v",
         ]
-        if args.extra_args.strip():
-            cmd.extend(args.extra_args.split())
 
         print("Ejecutando:", " ".join(cmd), flush=True)
-        r = subprocess.run(cmd)
-        if r.returncode != 0:
-            print(f"ERROR: verificar_m3u salió con código {r.returncode}", file=sys.stderr)
-            return r.returncode
+        result = subprocess.run(cmd)
+
+        if result.returncode != 0:
+            print(
+                f"ERROR: verificar_m3u salió con código {result.returncode}",
+                file=sys.stderr,
+            )
+            return result.returncode
 
         if not ok_path.exists():
-            print("ERROR: no se generó el M3U de OK", file=sys.stderr)
+            print("ERROR: no se generó la playlist de streams vivos.", file=sys.stderr)
             return 1
 
-        shutil.copyfile(ok_path, master)
-        # copiar fallos como artefacto opcional junto a la maestra
-        fail_dest = master.with_name("master_fail_last.m3u")
-        if fail_path.exists():
-            shutil.copyfile(fail_path, fail_dest)
-            print(f"Fallos guardados en {fail_dest}", flush=True)
+        # Reportes persistentes antes de que TemporaryDirectory borre /tmp.
+        copy_if_requested(ok_path, args.ok_output)
+        copy_if_requested(fail_path, args.fail_output)
+        copy_if_requested(csv_path, args.report_output)
 
+        # La maestra pasa a contener exclusivamente los vivos detectados.
+        shutil.copyfile(ok_path, master)
         print(f"Maestra actualizada: {master}", flush=True)
+
     return 0
 
 
