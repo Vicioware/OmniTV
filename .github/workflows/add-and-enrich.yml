@@ -1,18 +1,22 @@
 name: Add Sources And Enrich
 
 on:
-  schedule:
-    - cron: "0 */12 * * *"
   workflow_dispatch:
     inputs:
       workers:
-        description: "Workers paralelos"
+        description: "Canales en paralelo (2 o 3 recomendado)"
         required: false
         default: "3"
+        type: string
       sample:
-        description: "Segundos de muestreo FFmpeg"
+        description: "Segundos de muestreo FFmpeg por stream nuevo"
         required: false
         default: "12"
+        type: string
+
+  # Opcional: cada 12 horas.
+  # schedule:
+  #   - cron: "0 */12 * * *"
 
 permissions:
   contents: write
@@ -35,11 +39,44 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install FFmpeg
+      - name: Instalar FFmpeg reciente con extension_picky
+        shell: bash
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
-          ffmpeg -version | head -n 2
+          set -euo pipefail
+
+          FFMPEG_URL="https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz"
+          INSTALL_DIR="$RUNNER_TEMP/ffmpeg"
+
+          curl --fail --location --retry 3 --retry-delay 3 \
+            --output "$RUNNER_TEMP/ffmpeg.tar.xz" \
+            "$FFMPEG_URL"
+
+          mkdir -p "$INSTALL_DIR"
+          tar -xJf "$RUNNER_TEMP/ffmpeg.tar.xz" \
+            --directory "$INSTALL_DIR" \
+            --strip-components=1
+
+          chmod +x "$INSTALL_DIR/bin/ffmpeg" "$INSTALL_DIR/bin/ffprobe"
+          echo "$INSTALL_DIR/bin" >> "$GITHUB_PATH"
+
+      - name: Verificar FFmpeg y extension_picky
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "=== Ejecutable usado ==="
+          which ffmpeg
+
+          echo "=== Versión ==="
+          ffmpeg -version | head -n 5
+
+          echo "=== Validación extension_picky ==="
+          if ! ffmpeg -hide_banner -h demuxer=hls 2>&1 | grep -q "extension_picky"; then
+            echo "::error::El FFmpeg instalado no dispone de extension_picky."
+            exit 1
+          fi
+
+          echo "OK: extension_picky está disponible"
 
       - name: Install Python deps
         run: |
@@ -48,9 +85,10 @@ jobs:
             pip install -r scripts/requirements.txt
           fi
 
-      # Sin clean_master.py a propósito
+      - name: Crear directorio de reportes
+        run: mkdir -p reports
 
-      - name: Merge fuentes
+      - name: Paso 2 - Analizar fuentes y agregar streams vivos
         env:
           PYTHONPATH: ${{ github.workspace }}/scripts
           PYTHONUNBUFFERED: "1"
@@ -59,10 +97,13 @@ jobs:
           python merge_sources.py \
             --master ../data/master.m3u \
             --sources ../data/source_playlists.txt \
-            --workers "${{ github.event.inputs.workers || '3' }}" \
-            --sample "${{ github.event.inputs.sample || '12' }}"
+            --workers "${{ inputs.workers || '3' }}" \
+            --sample "${{ inputs.sample || '12' }}" \
+            --alive-output ../reports/sources_alive.m3u \
+            --dead-output ../reports/sources_dead.m3u \
+            --report-dir ../reports/source_csv
 
-      - name: Enriquecer metadata
+      - name: Paso 3 - Enriquecer tvg-logo y tvg-id
         env:
           PYTHONPATH: ${{ github.workspace }}/scripts
           PYTHONUNBUFFERED: "1"
@@ -70,14 +111,29 @@ jobs:
         run: |
           python enrich_metadata.py --master ../data/master.m3u
 
-      - name: Commit y push
+      - name: Guardar playlist final
+        run: |
+          cp data/master.m3u reports/master_final.m3u
+
+      - name: Subir reportes de la ejecución
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: iptv-add-enrich-report-${{ github.run_number }}
+          path: reports/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Commit y push de la maestra
         run: |
           git config user.name "iptv-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
           git add data/master.m3u
+
           if git diff --staged --quiet; then
-            echo "Sin cambios en master.m3u"
+            echo "Sin cambios en data/master.m3u"
           else
-            git commit -m "chore(iptv): add sources + enrich [skip ci]"
+            git commit -m "chore(iptv): add sources and enrich metadata [skip ci]"
             git push
           fi
