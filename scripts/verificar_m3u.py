@@ -265,6 +265,10 @@ def ffmpeg_input_args(e: Entry, default_ua: str) -> List[str]:
 # ---------------------------------------------------------------------------
 
 def last_error_line(stderr: str) -> str:
+    for line in (stderr or "").splitlines():
+        s = line.strip()
+        if re.search(r"unrecognized option", s, re.I):
+            return re.sub(r"^\[[^\]]*\]\s*", "", s)[:170]
     useful: List[str] = []
     for line in (stderr or "").splitlines():
         s = line.strip()
@@ -282,10 +286,6 @@ def last_error_line(stderr: str) -> str:
         if s and ERR_RE.search(s):
             cand = re.sub(r"^\[[^\]]*\]\s*", "", s)
     return cand[:170] if cand else "fallo desconocido"
-    for line in (stderr or "").splitlines():
-        s = line.strip()
-        if re.search(r"unrecognized option", s, re.I):
-            return re.sub(r"^\[[^\]]*\]\s*", "", s)[:170]
 
 
 def _kill_process_tree(proc: subprocess.Popen) -> None:
@@ -363,15 +363,37 @@ def run_ffmpeg(
 
 
 def ffmpeg_sync_args() -> List[str]:
+    """
+    Evita -vsync en builds git (N-xxxxx) y FFmpeg >= 5.1.
+    En master reciente -vsync puede no existir; -fps_mode sí.
+    """
     try:
         out = subprocess.run(
             ["ffmpeg", "-version"],
             capture_output=True,
             text=True,
             timeout=15,
-        ).stdout
-        m = re.search(r"ffmpeg version \D*?(\d+)\.(\d+)", out or "")
+            errors="replace",
+        ).stdout or ""
+
+        # master/nightly: "ffmpeg version N-125716-g...."
+        if re.search(r"ffmpeg version\s+N-", out, re.I):
+            return ["-fps_mode", "passthrough"]
+
+        m = re.search(r"ffmpeg version \D*?(\d+)\.(\d+)", out)
         if m and (int(m.group(1)), int(m.group(2))) >= (5, 1):
+            return ["-fps_mode", "passthrough"]
+
+        # Cubre cadenas raras (dates, forks, etc.)
+        p = subprocess.run(
+            ["ffmpeg", "-h"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            errors="replace",
+        )
+        blob = (p.stdout or "") + (p.stderr or "")
+        if re.search(r"(?m)^\s*-fps_mode\b", blob) or "fps_mode" in blob:
             return ["-fps_mode", "passthrough"]
     except Exception:  # noqa: BLE001
         pass
