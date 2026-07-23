@@ -282,6 +282,10 @@ def last_error_line(stderr: str) -> str:
         if s and ERR_RE.search(s):
             cand = re.sub(r"^\[[^\]]*\]\s*", "", s)
     return cand[:170] if cand else "fallo desconocido"
+    for line in (stderr or "").splitlines():
+        s = line.strip()
+        if re.search(r"unrecognized option", s, re.I):
+            return re.sub(r"^\[[^\]]*\]\s*", "", s)[:170]
 
 
 def _kill_process_tree(proc: subprocess.Popen) -> None:
@@ -387,6 +391,22 @@ def ffmpeg_supports_extension_picky() -> bool:
         return "extension_picky" in blob
     except Exception:  # noqa: BLE001
         return False
+        
+def ffmpeg_has_option(name: str) -> bool:
+    """True si 'name' aparece en la ayuda de esta build (sin guion inicial)."""
+    try:
+        p = subprocess.run(
+            ["ffmpeg", "-h", "full"],
+            capture_output=True,
+            text=True,
+            timeout=20,
+            errors="replace",
+        )
+        blob = (p.stdout or "") + (p.stderr or "")
+        # coincidencia de opción: "-nombre " o "-nombre="
+        return re.search(rf"(?m)^\s*-{re.escape(name)}[\s=]", blob) is not None
+    except Exception:
+        return False
 
 
 def build_ffmpeg_cmd(
@@ -406,35 +426,34 @@ def build_ffmpeg_cmd(
         "-nostdin",
         "-loglevel",
         "info",
-        "-rw_timeout",
-        rw_us,
-        "-reconnect",
-        "1",
-        "-reconnect_streamed",
-        "1",
-        "-reconnect_delay_max",
-        "3",
-        "-probesize",
-        str(cfg.probesize),
-        "-analyzeduration",
-        str(cfg.analyzeduration),
-        "-fflags",
-        "+genpts+discardcorrupt",
-        "-err_detect",
-        "ignore_err",
+    ]
+
+    if getattr(cfg, "http_rw_timeout", True):
+        cmd += ["-rw_timeout", rw_us]
+
+    if getattr(cfg, "http_reconnect", True):
+        cmd += [
+            "-reconnect", "1",
+            "-reconnect_streamed", "1",
+            "-reconnect_delay_max", "3",
+        ]
+
+    cmd += [
+        "-probesize", str(cfg.probesize),
+        "-analyzeduration", str(cfg.analyzeduration),
+        "-fflags", "+genpts+discardcorrupt",
+        "-err_detect", "ignore_err",
     ]
 
     if kind == "hls":
         if getattr(cfg, "ext_picky", False):
             cmd += ["-extension_picky", "0"]
-        cmd += [
-            "-allowed_extensions",
-            "ALL",
-            "-max_reload",
-            str(cfg.max_reload),
-            "-m3u8_hold_counters",
-            str(cfg.max_reload),
-        ]
+        if getattr(cfg, "hls_allowed_ext", True):
+            cmd += ["-allowed_extensions", "ALL"]
+        if getattr(cfg, "hls_max_reload", True):
+            cmd += ["-max_reload", str(cfg.max_reload)]
+        if getattr(cfg, "hls_hold", True):
+            cmd += ["-m3u8_hold_counters", str(cfg.max_reload)]
 
     cmd += [*ffmpeg_input_args(e, cfg.default_ua), "-i", e.url]
 
@@ -1007,6 +1026,11 @@ def main() -> int:
 
     sync_args = ffmpeg_sync_args()
     cfg.ext_picky = ffmpeg_supports_extension_picky()
+    cfg.hls_allowed_ext = ffmpeg_has_option("allowed_extensions")
+    cfg.hls_max_reload = ffmpeg_has_option("max_reload")
+    cfg.hls_hold = ffmpeg_has_option("m3u8_hold_counters")
+    cfg.http_reconnect = ffmpeg_has_option("reconnect")
+    cfg.http_rw_timeout = ffmpeg_has_option("rw_timeout")
     LOG.info(
         "sync_args=%s timeout=%.1fs workers=%d extension_picky=%s retries=%d",
         sync_args,

@@ -93,6 +93,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends ca-certificates
           sudo update-ca-certificates
+          
+      - name: FFmpeg version
+        run: |
+          ffmpeg -version | head -3
+          ffmpeg -h full 2>&1 | grep -E 'm3u8_hold_counters|allowed_extensions|extension_picky|reconnect' || true
 
       - name: Paso 2 - Analizar fuentes y agregar streams vivos
         env:
