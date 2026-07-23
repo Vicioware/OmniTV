@@ -133,7 +133,7 @@ def build_entry(idx: int, block: List[str]) -> Entry:
 
 
 def parse_playlist(text: str) -> Tuple[str, List[Entry]]:
-    """Igual que verificar_m3u: conserva cada línea del bloque tal cual."""
+    """Igual que verificar_m3u: conserva cada lÃ­nea del bloque tal cual."""
     header, entries = "#EXTM3U", []
     block: List[str] = []
     has_extinf = False
@@ -180,7 +180,7 @@ def load_text(src: str, timeout: int = 90) -> str:
 
 
 def stream_key(e: Entry) -> str:
-    """Deduplicación por URL (sin querystring)."""
+    """DeduplicaciÃ³n por URL (sin querystring)."""
     u = (e.url or "").strip()
     return u.split("?", 1)[0].rstrip("/")
 
@@ -188,14 +188,14 @@ def stream_key(e: Entry) -> str:
 def normalize_name(name: str) -> str:
     n = unquote(name or "").strip().lower()
     n = re.sub(r"\[.*?\]|\(.*?\)", " ", n)
-    n = re.sub(r"[^\w\sàáâãäåèéêëìíîïòóôõöùúûüñç.+-]", " ", n, flags=re.UNICODE)
+    n = re.sub(r"[^\w\sÃ Ã¡Ã¢Ã£Ã¤Ã¥Ã¨Ã©ÃªÃ«Ã¬Ã­Ã®Ã¯Ã²Ã³Ã´ÃµÃ¶Ã¹ÃºÃ»Ã¼Ã±Ã§.+-]", " ", n, flags=re.UNICODE)
     n = re.sub(r"\s+", " ", n).strip()
     n = re.sub(r"\b(hd|fhd|uhd|4k|sd|hevc|h265|h264)\b", "", n).strip()
     return re.sub(r"\s+", " ", n)
 
 
 def _set_or_replace_attr(extinf: str, key: str, value: str, overwrite: bool) -> str:
-    """Inserta o reemplaza un atributo en la línea #EXTINF sin tocar el resto."""
+    """Inserta o reemplaza un atributo en la lÃ­nea #EXTINF sin tocar el resto."""
     if not extinf.lower().startswith("#extinf"):
         return extinf
 
@@ -211,7 +211,7 @@ def _set_or_replace_attr(extinf: str, key: str, value: str, overwrite: bool) -> 
             return extinf
         return pat.sub(rf'\1"{value}"', extinf, count=1)
 
-    # Insertar antes de la coma del título (última coma fuera de comillas)
+    # Insertar antes de la coma del tÃ­tulo (Ãºltima coma fuera de comillas)
     in_q = False
     qch = ""
     last_comma = -1
@@ -230,13 +230,13 @@ def _set_or_replace_attr(extinf: str, key: str, value: str, overwrite: bool) -> 
         right = extinf[last_comma:]  # incluye la coma y el nombre
         return f"{left} {attr}{right}"
 
-    # Sin coma de título: añadir al final
+    # Sin coma de tÃ­tulo: aÃ±adir al final
     return f"{extinf.rstrip()} {attr}"
 
 
 def set_extinf_attr(entry: Entry, key: str, value: str, overwrite: bool = False) -> bool:
     """
-    Actualiza tvg-logo / tvg-id (u otro attr) en extinf Y en block[línea EXTINF].
+    Actualiza tvg-logo / tvg-id (u otro attr) en extinf Y en block[lÃ­nea EXTINF].
     Devuelve True si hubo cambio.
     """
     if not value:
@@ -248,10 +248,10 @@ def set_extinf_attr(entry: Entry, key: str, value: str, overwrite: bool = False)
     entry.extinf = new_extinf
     for i, ln in enumerate(entry.block):
         if ln.strip().lower().startswith("#extinf"):
-            # preservar indentación original si la hubiera
+            # preservar indentaciÃ³n original si la hubiera
             prefix = ln[: len(ln) - len(ln.lstrip())]
             entry.block[i] = prefix + new_extinf
             break
-    # refrescar name por si venía de tvg-name
+    # refrescar name por si venÃ­a de tvg-name
     entry.name = extinf_title(entry.extinf)
     return True
