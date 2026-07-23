@@ -446,21 +446,7 @@ def build_ffmpeg_cmd(
         "ffmpeg",
         "-hide_banner",
         "-nostdin",
-        "-loglevel",
-        "info",
-    ]
-
-    if getattr(cfg, "http_rw_timeout", True):
-        cmd += ["-rw_timeout", rw_us]
-
-    if getattr(cfg, "http_reconnect", True):
-        cmd += [
-            "-reconnect", "1",
-            "-reconnect_streamed", "1",
-            "-reconnect_delay_max", "3",
-        ]
-
-    cmd += [
+        "-loglevel", "info",
         "-probesize", str(cfg.probesize),
         "-analyzeduration", str(cfg.analyzeduration),
         "-fflags", "+genpts+discardcorrupt",
@@ -470,24 +456,27 @@ def build_ffmpeg_cmd(
     if kind == "hls":
         if getattr(cfg, "ext_picky", False):
             cmd += ["-extension_picky", "0"]
-        if getattr(cfg, "hls_allowed_ext", True):
-            cmd += ["-allowed_extensions", "ALL"]
-        if getattr(cfg, "hls_max_reload", True):
-            cmd += ["-max_reload", str(cfg.max_reload)]
-        if getattr(cfg, "hls_hold", True):
-            cmd += ["-m3u8_hold_counters", str(cfg.max_reload)]
+        cmd += [
+            "-allowed_extensions", "ALL",
+            "-max_reload", str(cfg.max_reload),
+            "-m3u8_hold_counters", str(cfg.max_reload),
+        ]
 
-    cmd += [*ffmpeg_input_args(e, cfg.default_ua), "-i", e.url]
+    # Protocolo HTTP/TCP + cabeceras: pegados al -i (comportamiento estable en builds master)
+    cmd += [
+        "-rw_timeout", rw_us,
+        "-reconnect", "1",
+        "-reconnect_streamed", "1",
+        "-reconnect_delay_max", "2",
+        "-reconnect_on_network_error", "1",
+        *ffmpeg_input_args(e, cfg.default_ua),
+        "-i", e.url,
+    ]
 
     if start_ss and start_ss > 0:
         cmd += ["-ss", f"{start_ss:.3f}"]
 
-    cmd += [
-        "-t",
-        f"{cfg.sample:.3f}",
-        "-map",
-        "0:v:0",
-    ]
+    cmd += ["-t", f"{cfg.sample:.3f}", "-map", "0:v:0"]
 
     if with_filters:
         vf = (
@@ -496,18 +485,7 @@ def build_ffmpeg_cmd(
         )
         cmd += ["-vf", vf]
 
-    cmd += [
-        *sync_args,
-        "-an",
-        "-sn",
-        "-dn",
-        "-progress",
-        "pipe:1",
-        "-nostats",
-        "-f",
-        "null",
-        "-",
-    ]
+    cmd += [*sync_args, "-an", "-sn", "-dn", "-progress", "pipe:1", "-nostats", "-f", "null", "-"]
     return cmd
 
 
@@ -927,7 +905,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     ap.add_argument(
         "--rw-timeout",
         type=float,
-        default=15.0,
+        default=45.0,
         help="timeout de red por operación (s)",
     )
     ap.add_argument(
