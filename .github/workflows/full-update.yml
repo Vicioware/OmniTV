@@ -84,6 +84,12 @@ jobs:
           if [ -f scripts/requirements.txt ]; then
             pip install -r scripts/requirements.txt
           fi
+          
+      - name: Instalar certificados CA
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ca-certificates
+          sudo update-ca-certificates
 
       - name: Paso 1 - Limpiar maestra
         env:

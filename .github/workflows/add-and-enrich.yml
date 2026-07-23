@@ -87,6 +87,12 @@ jobs:
 
       - name: Crear directorio de reportes
         run: mkdir -p reports
+        
+      - name: Instalar certificados CA
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ca-certificates
+          sudo update-ca-certificates
 
       - name: Paso 2 - Analizar fuentes y agregar streams vivos
         env:

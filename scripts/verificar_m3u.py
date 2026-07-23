@@ -423,9 +423,6 @@ def build_ffmpeg_cmd(
         "-err_detect",
         "ignore_err",
     ]
-    
-    if not getattr(cfg, "tls_verify", False):
-        cmd += ["-tls_verify", "0"]
 
     if kind == "hls":
         if getattr(cfg, "ext_picky", False):
@@ -980,11 +977,6 @@ def build_arg_parser() -> argparse.ArgumentParser:
         action="count",
         default=0,
         help="logging (-v = INFO, -vv = DEBUG con comando FFmpeg y cola de stderr)",
-    )
-    ap.add_argument(
-        "--tls-verify",
-        action="store_true",
-        help="Verificar certificados TLS HTTPS; por defecto se toleran certificados inválidos",
     )
     return ap
 
